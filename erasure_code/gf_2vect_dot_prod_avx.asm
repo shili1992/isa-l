@@ -240,7 +240,7 @@ section .text
 align 16
 mk_global gf_2vect_dot_prod_avx, function
 
-func(gf_2vect_dot_prod_avx)
+func(gf_2vect_dot_prod_avx) ; 和计算一个校验块gf_vect_dot_prod_avx比较类似， 每次计算出两个parity
 	FUNC_SAVE
 	SLDR	len, len_m
 	sub	len, 16

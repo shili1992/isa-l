@@ -38,7 +38,7 @@ void ec_init_tables(int k, int rows, unsigned char *a, unsigned char *g_tbls)
 
 	for (i = 0; i < rows; i++) {
 		for (j = 0; j < k; j++) {
-			gf_vect_mul_init(*a++, g_tbls);
+			gf_vect_mul_init(*a++, g_tbls);  //编码矩阵 转化为乘法表， 每个矩阵元素对应 32位， 高16位， 低16位（方便SIMD计算）
 			g_tbls += 32;
 		}
 	}
@@ -51,9 +51,10 @@ unsigned char gf_mul(unsigned char a, unsigned char b)
 
 	if ((a == 0) || (b == 0))
 		return 0;
-
+    // 没有大表 则 将乘法转成  对数相加（查对数表两次， 加法一次）， 然后再算指数（查指数表一次）， 得到结果
 	return gff_base[(i = gflog_base[a] + gflog_base[b]) > 254 ? i - 255 : i];
 #else
+	// 有大表 直接查询 table[a][b] 的表， 表大小65536（256 * 256）
 	return gf_mul_table_base[b * 256 + a];
 #endif
 }
@@ -219,8 +220,9 @@ void gf_vect_mul_init(unsigned char c, unsigned char *tbl)
 	c14 = c8 ^ c6;
 	c15 = c8 ^ c7;
 
+	; 得到矩阵元素的低16位， c的幂运算
 	tbl[0] = 0;
-	tbl[1] = c;
+	tbl[1] = c;  ;这个元素就是 矩阵中的元素
 	tbl[2] = c2;
 	tbl[3] = c3;
 	tbl[4] = c4;
@@ -252,6 +254,7 @@ void gf_vect_mul_init(unsigned char c, unsigned char *tbl)
 	c30 = c24 ^ c22;
 	c31 = c24 ^ c23;
 
+	; 得到矩阵元素的高16位
 	tbl[16] = 0;
 	tbl[17] = c17;
 	tbl[18] = c18;
@@ -298,6 +301,7 @@ void gf_vect_mad_base(int len, int vec, int vec_i,
 	}
 }
 
+//base的算法 一个元素一个元素进行计算
 void ec_encode_data_base(int len, int srcs, int dests, unsigned char *v,
 			 unsigned char **src, unsigned char **dest)
 {
@@ -307,6 +311,7 @@ void ec_encode_data_base(int len, int srcs, int dests, unsigned char *v,
 	for (l = 0; l < dests; l++) {
 		for (i = 0; i < len; i++) {
 			s = 0;
+            //多个src的数据 乘 矩阵的元素（方程中的系数）， 然后相加，得到最终的结果
 			for (j = 0; j < srcs; j++)
 				s ^= gf_mul(src[j][i], v[j * 32 + l * srcs * 32 + 1]);
 

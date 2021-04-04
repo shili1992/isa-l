@@ -148,8 +148,8 @@
 %endif	; output formats
 
 %define len   arg0
-%define vec   arg1
-%define mul_array arg2
+%define vec   arg1   ; Number of vector sources.
+%define mul_array arg2 ;  Pointer to 32*len byte array of pre-calculated constants based on the array of input coefficients.
 %define	src   arg3
 %define dest  arg4
 
@@ -186,7 +186,7 @@
 section .text
 
 %define xmask0f  xmm5
-%define xgft_lo  xmm4
+%define xgft_lo  xmm4·
 %define xgft_hi  xmm3
 
 %define x0     xmm0
@@ -195,7 +195,7 @@ section .text
 
 align 16
 mk_global gf_vect_dot_prod_avx, function
-func(gf_vect_dot_prod_avx)
+func(gf_vect_dot_prod_avx)  ; GF(2^8) vector dot product, 多个数据块 * 对应乘法表 获取某一个校验块数据
 	FUNC_SAVE
 	SLDR 	len, len_m
 	sub	len, 16
@@ -206,8 +206,8 @@ func(gf_vect_dot_prod_avx)
 
 .loop16:
 	vpxor	xp, xp
-	mov	tmp, mul_array
-	xor	vec_i, vec_i
+	mov	tmp, mul_array   ; mul_array 就是构造的乘法表
+	xor	vec_i, vec_i     ; 一个16字节处理完毕， 处理下一个16字节的数据。 src index从0开始
 
 .next_vect:
 
@@ -216,13 +216,14 @@ func(gf_vect_dot_prod_avx)
 	vmovdqu	xgft_hi, [tmp+16]	;     "     Cx{00}, Cx{10}, ..., Cx{f0}
 	XLDR	x0, [ptr+pos]		;Get next source vector
 
-	add	tmp, 32
-	add	vec_i, 1
+	add	tmp, 32             ; 增加 乘法矩阵的 pos, 每次增加32
+	add	vec_i, 1            ; 下一个数据块 乘法 乘法表
 
 	vpand	xtmpa, x0, xmask0f	;Mask low src nibble in bits 4-0
 	vpsraw	x0, x0, 4		;Shift to put high nibble into bits 4-0
 	vpand	x0, x0, xmask0f		;Mask high src nibble in bits 4-0
 
+;;;位移 查表 异或 得到乘法结果
 	vpshufb	xgft_hi, xgft_hi, x0	;Lookup mul table of high nibble
 	vpshufb	xgft_lo, xgft_lo, xtmpa	;Lookup mul table of low nibble
 	vpxor	xgft_hi, xgft_hi, xgft_lo ;GF add high and low partials
@@ -230,12 +231,12 @@ func(gf_vect_dot_prod_avx)
 
 	SLDR	vec, vec_m
 	cmp	vec_i, vec
-	jl	.next_vect
+	jl	.next_vect   ; 一个 数据块 16字节计算完成， 计算下一个数据块相同位置的16字节。 还是在计算同一个parity， xp存放累计xor的结果
 
 	SLDR 	dest, dest_m
-	XSTR	[dest+pos], xp
+	XSTR	[dest+pos], xp ;将得到的结果放到内存对应的位置上
 
-	add	pos, 16			;Loop on 16 bytes at a time
+	add	pos, 16			;Loop on 16 bytes at a time， 处理下一个16字节
 	SLDR 	len, len_m
 	cmp	pos, len
 	jle	.loop16
